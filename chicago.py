@@ -50,9 +50,9 @@ def getData():
   # Store data in a dictionary
   #making dictionaries for mongoDB
   non_domestic_chicago_data = non_domestic_crimes_df.to_dict()
-  domestic_chicago_data = domestic_crimes_df.to_dict()  
+  chicago_data = domestic_crimes_df.to_dict()  
   # Return results
-  return domestic_chicago_data
+  return chicago_data
   return non_domestic_chicago_data
 
 if __name__ == '__main__':
