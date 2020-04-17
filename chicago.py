@@ -1,11 +1,13 @@
 #importing dependencies and setting app token
 import pandas as pd
 from datetime import date, datetime
+import numpy as np
 from sodapy import Socrata
 import csv
 import sqlite3
-
+crime_data = "ijzp-q8t2"
 MyAppToken = 'GuILMuJLLhVOQ8u9cyXPc56p3'
+client = Socrata("data.cityofchicago.org", MyAppToken)
 
 #checking the day of the month and printing the result, this is used to filter the dataframe later
 today = date.today()
@@ -15,101 +17,93 @@ day = int(daynum) - 7
 print(f"Day: {day} \nMonth: {month}")
 
 def getData():
-    crime_data = "ijzp-q8t2"
-    client = Socrata("data.cityofchicago.org", MyAppToken)
-    df = pd.DataFrame(
-        client.get(
-            crime_data, 
-            where=f"Date BETWEEN '2020-01-01' AND '2020-{month}-{day}'",
-            limit=100000,
-            exclude_system_fields=True
+    
+
+    def getRawData(year):
+        where_clause = f"Date BETWEEN '{year}-01-01' AND '{year}-{month}-{day}'";
+        #where_clause = where_clause + " AND  'Primary Type' IN ('THEFT', 'BATTERY')"
+        #where_clause = "'Primary Type' IN ('THEFT', 'BATTERY')"
+        
+        df = pd.DataFrame(
+            client.get(
+                crime_data, 
+                where=where_clause,
+                limit=100000,
+                exclude_system_fields=True
+            )
         )
-    )
-    client.close()
+        client.close()
 
-    #reformatting the data from the api call and organizing the results
-    df['month'] = pd.DatetimeIndex(df['date']).month
-    df['year'] = pd.DatetimeIndex(df['date']).year
-    df['date'] = pd.to_datetime(df['date']).dt.strftime('%m.%d.%Y')
+        #reformatting the data from the api call and organizing the results
+        df['day'] = pd.DatetimeIndex(df['date']).day
+        df['month'] = pd.DatetimeIndex(df['date']).month
+        df['year'] = pd.DatetimeIndex(df['date']).year
+        df['date'] = pd.to_datetime(df['date']).dt.strftime('%Y-%m-%d')
+        df['month_day'] = pd.to_datetime(df['date']).dt.strftime('%m-%d')
+        df["primary_type"] = df["primary_type"].str.lower().str.title()
 
-    #converting strings from all caps to an easier to read format
-    df["primary_type"] = df["primary_type"].str.lower().str.title()
-    df["description"] = df["description"].str.lower().str.title()
-    df["location"] = df["location_description"].str.lower().str.title()
+        # Organize column order: 
+        dfReturn = df[[
+            "primary_type"
+            , "date"
+            , "month_day"
+            , "day"
+            , "month"
+            , "year"
+            , "domestic"
+        ]]
+        
+        return dfReturn
 
-    # Organize columns: 
-    df2020 = df[["date","month", "year","primary_type", "description","latitude", "longitude", "domestic"]]
-    df2020.shape
+    df2020 = getRawData('2020')
+    df2019 = getRawData('2019')
+    df2018 = getRawData('2018')
 
-    df1 = pd.DataFrame(
-        client.get(
-            crime_data, 
-            where=f"Date BETWEEN '2019-01-01' AND '2019-{month}-{day}'",
-            limit=100000,
-            exclude_system_fields=True
-        )
-    )
-    client.close()
+    #printing shape of all results to confirm the data is correct  
+    print(f"2020: {df2020.shape} 2019: {df2019.shape} 2018: {df2018.shape}")
 
-    #reformatting the data from the api call and organizing the results
-    df1['month'] = pd.DatetimeIndex(df1['date']).month
-    df1['year'] = pd.DatetimeIndex(df1['date']).year
-    df1['date'] = pd.to_datetime(df1['date']).dt.strftime('%m.%d.%Y')
-
-    #converting strings from all caps to an easier to read format
-    df1["primary_type"] = df1["primary_type"].str.lower().str.title()
-    df1["description"] = df1["description"].str.lower().str.title()
-    df1["location"] = df1["location_description"].str.lower().str.title()
-
-    # Organize columns: 
-    df2019 = df1[["date","month","year","primary_type","description","latitude","longitude","domestic"]]
-    df2019.shape
-
-    #second api call to recieve the data from 2019
-    df2 = pd.DataFrame(
-        client.get(
-            crime_data, 
-            where=f"Date BETWEEN '2018-01-01' AND '2018-{month}-{day}'",
-            limit=100000,
-            exclude_system_fields=True
-        )
-    )
-    client.close()
-
-    #reformatting the data from the api call and organizing the results
-    df2['month'] = pd.DatetimeIndex(df2['date']).month
-    df2['year'] = pd.DatetimeIndex(df2['date']).year
-    df2['date'] = pd.to_datetime(df2['date']).dt.strftime('%m.%d.%Y')
-
-    #converting strings from all caps to an easier to read format
-    df2["primary_type"] = df2["primary_type"].str.lower().str.title()
-    df2["description"] = df2["description"].str.lower().str.title()
-    df2["location"] = df2["location_description"].str.lower().str.title()
-
-    # Organize columns: 
-    df2018 = df2[["date","month","year","primary_type","description","latitude","longitude","domestic"]]
-    df2018.shape
-
-    #combining the 2019 and 2020 dataframes into one, also resetting the index
+    #combining the 2018, 2019, and 2020 dataframes into one
     dataframes = [df2018, df2019, df2020]
     final_df = pd.concat(dataframes)
-    final_df.reset_index(inplace=True)
-    print(final_df.shape)
-    final_df.head()
+    print(f"Final DF Rows/Columns: {final_df.shape}")
 
+    #########################################################
+    #Creating AGG's and Group By's, 5 in total
+    #########################################################
 
-    # dom_df = final_df.filter(like = 'True')
-    # dom_df
+    aggs_overall = final_df.groupby(["date", "month_day"]).agg({'day': [np.count_nonzero]}).reset_index() 
+    aggs_overall.columns = ["date", "month_day", "crimes_committed"]
 
-    groupby_df = final_df.groupby(['month', 'domestic', 'year']).count()
-    groupby_df.reset_index(inplace=True)
+    dfCSV = aggs_overall.set_index('date')
 
-    
-    db = sqlite3.connect('chicago_data.sqlite3')
+    aggs_by_date_type = final_df.groupby(["date", "month_day", "primary_type"]).agg({'day': [np.count_nonzero]}).reset_index() 
+    aggs_by_date_type.columns = ["date", "month_day", "primary_type", "crimes_committed"]
+    aggs_by_date_type = aggs_by_date_type.set_index(pd.DatetimeIndex(aggs_by_date_type['date']))
+    aggs_by_date_type = aggs_by_date_type.drop(['date'], axis=1)
 
+    grouped_primary_type = final_df.groupby(['date',  'year','month', 'primary_type']).count()
+    grouped_primary_type = grouped_primary_type.drop(columns = ['day','month_day'])
+    grouped_primary_type = grouped_primary_type.rename(columns={"domestic": "total_crimes"})
+    grouped_primary_type.reset_index(inplace=True)
+
+    grouped_month_day = final_df.groupby(['month_day', 'year','domestic']).count()
+    grouped_month_day = grouped_month_day.drop(columns = ['date','day','month'])
+    grouped_month_day = grouped_month_day.rename(columns={"primary_type": "month_total_crimes"})
+    grouped_month_day.reset_index(inplace=True)
+
+    ############################################################
+    #creating database from all dataframes created in chicago.py
+    ############################################################
+
+    #creates sql lite file called chicago_data and adds a cursor so we can create queries
+    db = sqlite3.connect('chicago_data.db')
     #inserts only new values from api call into sqlite file
     final_df.to_sql('chicago_data', db, if_exists = 'replace')
-
+    aggs_overall.to_sql('aggs_overall', db, if_exists = 'replace')
+    aggs_by_date_type.to_sql('aggs_by_date_type', db, if_exists = 'replace')
+    dfCSV.to_sql('dfCSV', db, if_exists = 'replace')
+    grouped_primary_type.to_sql('group_type_df', db, if_exists = 'replace')
+    grouped_month_day.to_sql('groupby_df', db, if_exists = 'replace')
     db.close()
 
 if __name__ == '__main__':

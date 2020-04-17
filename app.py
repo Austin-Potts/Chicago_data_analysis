@@ -27,12 +27,12 @@ class aggs_overall(db.Model):
 class aggs_by_date_type(db.Model):
     __tablename__ = 'aggs_by_date_type'
     __table_args__ = { 'extend_existing': True }
-    index = db.Column(db.Text, primary_key=True)
+    date = db.Column(db.Text, primary_key=True)
 
 class dfCSV(db.Model):
     __tablename__ = 'dfCSV'
     __table_args__ = { 'extend_existing': True }
-    index = db.Column(db.Text, primary_key=True)
+    date = db.Column(db.Text, primary_key=True)
 
 class group_type_df(db.Model):
     __tablename__ = 'group_type_df'
@@ -46,7 +46,13 @@ class month_day(db.Model):
 #home route to hold initial visuals which need to be updated with button press
 @app.route("/")
 def home():
-    print("Total number of schools is", chicago_crime.query.count())
+    print("Total number of rows in chicago_data table: ", chicago_crime.query.count())
+    print("Total number of rows in aggs_overall table: ", aggs_overall.query.count())
+    print("Total number of rows in aggs_by_date_type table: ", aggs_by_date_type.query.count())
+    print("Total number of rows in dfCSV table: ", dfCSV.query.count())
+    print("Total number of rows in group_type_df table: ", group_type_df.query.count())
+    print("Total number of rows in groupby_df table: ", month_day.query.count())
+
     return render_template("index.html")
 
 @app.route("/updateData")
