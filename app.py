@@ -1,34 +1,41 @@
-from flask import Flask, render_template, request
-from flask_pymongo import PyMongo
+#importing dependencies and chicago.py to use getData function
 import chicago
+import sqlite3
+from flask import Flask,render_template
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 
-app.config['MONGO_URI'] = "mongodb://localhost:27017/chicago_data"
-mongo = PyMongo(app)
+#setting route to chicago database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///chicago_data.db'
+db = SQLAlchemy(app)
 
-# Route to render index.html template as our "home"
+#reflects the current database into the primary index.html
+db.Model.metadata.reflect(db.engine)
+
+#creates a model of the reflection, allowing for queries to be made (example: crime.query.count())
+class crime(db.Model):
+    __tablename__ = 'chicago_data'
+    __table_args__ = { 'extend_existing': True }
+    index = db.Column(db.Text, primary_key=True)
+
+#home route to hold initial visuals which need to be updated with button press
 @app.route("/")
-def data_homepage():
+def home():
+    print("Total number of schools is", crime.query.count())
+    return render_template("index.html")
 
-    # Find one record of data from the mongo database
-    chicago_data = mongo.db.chicago_data.find_one()
-
-    # Return template and data
-    return render_template("index.html", chicago_data=chicago_data)
-
-
-# Route that runs scrape_mars for data
-@app.route("/getData")
+@app.route("/updateData")
 def getData():
 
-    # Run the data function
-    chicago_data = chicago.getData()
+    # Run the data function with error handling for failed data loading
+    try:
+        chicago.getData()
+        print('Updated data loaded successfully')
+        return render_template("index.html")
 
-    # Update the Mongo database using update and upsert=True
-    mongo.db.chicago_data.update({}, chicago_data, upsert=True)
-    return render_template("index.html", chicago_data=chicago_data)
-    print('Chicago loaded successfully')
+    except:
+        print("Data updating failed")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)

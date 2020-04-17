@@ -1,59 +1,88 @@
-
 #importing dependencies and setting app token
 import pandas as pd
-import requests
 from datetime import date, datetime
 from sodapy import Socrata
+import csv
+import sqlite3
+
 MyAppToken = 'GuILMuJLLhVOQ8u9cyXPc56p3'
 
+#checking the day of the month and printing the result, this is used to filter the dataframe later
+today = date.today()
+daynum = today.strftime("%d")
+month = today.strftime("%m")
+day = int(daynum) - 7
+print(f"Day: {day} \nMonth: {month}")
+
 def getData():
-  #checking the day of the month and printing the result, this is used to filter the dataframe later
-  today = date.today()
-  day = today.strftime("%d")
-  print("Day =", day)
+    crime_data = "ijzp-q8t2"
+    client = Socrata("data.cityofchicago.org", MyAppToken)
+    df = pd.DataFrame(
+        client.get(
+            crime_data, 
+            where=f"Date BETWEEN '2020-01-01' AND '2020-{month}-{day}'",
+            limit=100000,
+            exclude_system_fields=True
+        )
+    )
+    client.close()
 
-  client = Socrata("data.cityofchicago.org", MyAppToken, None, None )
+    df['month'] = pd.DatetimeIndex(df['date']).month
+    df['year'] = pd.DatetimeIndex(df['date']).year
+    df['date'] = pd.to_datetime(df['date']).dt.strftime('%m.%d.%Y')
 
-  #getting () results from the soda api
-  try:
-      results = client.get("ijzp-q8t2", limit=20000)
-                          
-  except requests.exceptions.Timeout:
-    print("Timeout occurred")
+    df["primary_type"] = df["primary_type"].str.lower().str.title()
+    df["description"] = df["description"].str.lower().str.title()
+    df["location"] = df["location_description"].str.lower().str.title()
 
-  # Convert to pandas DataFrame
-  results_df = pd.DataFrame.from_records(results)
+    # Organize: 
+    current_df = df[["date","month", "year","primary_type", "description","latitude", "longitude", "domestic"]]
+    current_df.shape
 
-  #dropping columns that have no use
-  clean_columns_df = results_df.drop(columns=['location','x_coordinate', 'y_coordinate','id','beat','district','ward','community_area','fbi_code','updated_on', 'case_number', 'block', 'iucr', 'location_description', 'arrest', ':@computed_region_awaf_s7ux', ':@computed_region_6mkv_f3dw', ':@computed_region_vrxf_vc4k', ':@computed_region_bdys_3d7i', ':@computed_region_43wa_7qmu' , ':@computed_region_rpca_8um6',':@computed_region_d9mm_jgwp',':@computed_region_d3ds_rm58'])
-  #adding chicago column for organization while grouping
-  clean_columns_df['city'] = "Chicago"
-  #formatting datetime to ease readability
-  clean_columns_df['month'] = pd.to_datetime(clean_columns_df['date']).dt.strftime('%m')
-  clean_columns_df['date'] = pd.to_datetime(clean_columns_df['date']).dt.strftime('%d')
-  clean_columns_df.rename(columns = {'date':'day'}, inplace = True)
+    df1 = pd.DataFrame(
+        client.get(
+            crime_data, 
+            where=f"Date BETWEEN '2019-01-01' AND '2019-{month}-{day}'",
+            limit=100000,
+            exclude_system_fields=True
+        )
+    )
+    client.close()
+
+    df1['month'] = pd.DatetimeIndex(df1['date']).month
+    df1['year'] = pd.DatetimeIndex(df1['date']).year
+    df1['date'] = pd.to_datetime(df1['date']).dt.strftime('%m.%d.%Y')
+
+    df1["primary_type"] = df1["primary_type"].str.lower().str.title()
+    df1["description"] = df1["description"].str.lower().str.title()
+    df1["location"] = df1["location_description"].str.lower().str.title()
+
+    # Organize: 
+    old_df = df1[["date","month","year","primary_type","description","latitude","longitude","domestic"]]
+    old_df.shape
+
+    dataframes = [old_df, current_df]
+
+    final_df = pd.concat(dataframes)
+
+    final_df.reset_index(inplace=True)
+
+    print(f"{final_df.shape}")
 
 
-  #reorganizing columns to read easier left to right
-  clean_columns_df = clean_columns_df[["city",'primary_type','description','domestic', "day", "month", "year", "latitude", "longitude"]]
+    # dom_df = final_df.filter(like = 'True')
+    # dom_df
 
-  domestic_crimes = clean_columns_df['domestic'] == True
-  non_domestic_crimes = clean_columns_df['domestic'] == False
+    groupby_df = final_df.groupby(['month', 'domestic', 'year']).count()
+    groupby_df.reset_index(inplace=True)
 
-  #storing filtered and sorted by crime variety data sets
-  domestic_crimes_df = clean_columns_df[domestic_crimes]
-  non_domestic_crimes_df = clean_columns_df[non_domestic_crimes]
+    
+    db = sqlite3.connect('chicago_data.sqlite3')
 
-  #prints shape of both in terminal to make sure we are cooking with fire
-  print(f"Non Domestic Shape: {non_domestic_crimes_df.shape} and Domestic Shape: {domestic_crimes_df.shape}")
+    #inserts only new values from api call into sqlite file
+    final_df.to_sql('chicago_data', db, if_exists = 'replace')
 
-  # Store data in a dictionary
-  #making dictionaries for mongoDB
-  non_domestic_chicago_data = non_domestic_crimes_df.to_dict()
-  chicago_data = domestic_crimes_df.to_dict()  
-  # Return results
-  return chicago_data
-  return non_domestic_chicago_data
+    db.close()
 
 if __name__ == '__main__':
     getData()
