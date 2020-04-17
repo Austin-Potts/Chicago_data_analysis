@@ -51,7 +51,7 @@ class month_day(db.Model):
 #     conn.row_factory = sqlite3.Row # This enables column access by name: row['column_name'] 
 #     c = conn.cursor()
 #     rows = c.execute('''
-#     SELECT * from month_day
+#     SELECT * from groupby_df
 #     ''').fetchall()
 #     conn.commit()
 #     conn.close()
@@ -59,6 +59,11 @@ class month_day(db.Model):
 #         return json.dumps( [dict(ix) for ix in rows] ) #CREATE JSON
 #     return rows
 #     print get_all_users( json_str = True )
+
+# dat = sqlite3.connect('sqlite:///chicago_data.db')
+# query = dat.execute("SELECT * From groupby_by")
+# cols = [column[0] for column in query.description]
+# results= pd.DataFrame.from_records(data = query.fetchall(), columns = cols)
 
 #home route to hold initial visuals which need to be updated with button press
 @app.route("/")
