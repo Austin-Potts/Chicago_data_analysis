@@ -1,6 +1,7 @@
 #importing dependencies and chicago.py to use getData function
 import chicago
 import sqlite3
+import json
 from flask import Flask,render_template
 from flask_sqlalchemy import SQLAlchemy
 
@@ -43,6 +44,22 @@ class month_day(db.Model):
     __tablename__ = 'groupby_df'
     __table_args__ = { 'extend_existing': True }
     index = db.Column(db.Text, primary_key=True)
+
+# dba = 'sqlite:///chicago_data.db'
+# def get_all_users( json_str = False ):
+#     conn = sqlite3.connect( dba )
+#     conn.row_factory = sqlite3.Row # This enables column access by name: row['column_name'] 
+#     c = conn.cursor()
+#     rows = c.execute('''
+#     SELECT * from month_day
+#     ''').fetchall()
+#     conn.commit()
+#     conn.close()
+#     if json_str:
+#         return json.dumps( [dict(ix) for ix in rows] ) #CREATE JSON
+#     return rows
+#     print get_all_users( json_str = True )
+
 #home route to hold initial visuals which need to be updated with button press
 @app.route("/")
 def home():
